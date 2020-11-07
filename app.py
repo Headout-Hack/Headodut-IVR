@@ -3,10 +3,15 @@ from twilio.twiml.voice_response import VoiceResponse,Gather
 import speech_recognition as sr
 import urllib.request
 import random    
+import firebase_admin
+from firebase_admin import credentials,firestore
 import math
 
 r = sr.Recognizer()
 
+cred = credentials.Certificate("serviceAccount.json")
+firebase_admin.initialize_app(cred)
+db = firestore.client()
 orderAudio = ""
 
 en  = {
@@ -15,8 +20,8 @@ en  = {
     'message3':'Please speak up your order after the beep, and press star button when you are done with the order.',
     'message4':'Thank you for the order',
     'message5':'Thank you for confirmation of the order',
-    'message6':'Please provide the 6 digit address code so that we can ship the medicines to your home',
-    'message7':'Thank you for providing the address code',
+    'message6':'Please speak your complete address so that we can ship the medicines to your home',
+    'message7':'Thank you for providing the address.',
     'message8':'Your order has been processed. Your order will be shipped soon.',
     'message9':'Your order id is ',
     'message10':'Thank you for shopping with us. We hope to see you again, GoodBye.'
@@ -29,32 +34,34 @@ def hello():
     return "Hello world"
 
 
+
 @app.route("/answer", methods=['GET', 'POST'])
 def voice():
     response = VoiceResponse()
     args = request.args
     if 'RecordingUrl' in args:
+        global orderAudio
         orderAudio = getAudio(args['RecordingUrl'])
-        response.say(en['message1'])
+        response.say(en['message1'],voice='Polly.Aditi',language="hi-IN")
         gather = Gather(num_digits=1, action='/gatherChoice')
         response.append(gather)
         return str(response)
     else:
 
-        response.say(
-           en['message2']
+        response.say(en['message2'],voice='Polly.Aditi',language="hi-IN",
+           
         )
-        response.say(
-           en['message3']
+        response.say( en['message3'],voice='Polly.Aditi',language="hi-IN",
+          
         )
         response.record(
-            action= 'http://dca2ec14f8d8.ngrok.io/answer',
+            action= 'http://2e8d390ba5e3.ngrok.io/answer',
             method='GET',
             finish_on_key='*',
             transcribe=True,
             play_beep=True
         )
-        response.say()
+        response.say(voice='Polly.Aditi',language="hi-IN",)
         print(str(response))
         return str(response)
 
@@ -66,11 +73,15 @@ def gatherConfirm():
         confirmation = int(request.values['Digits'])
         print(confirmation)
         if confirmation == 1:
-            response.say(en['message5'])
-            response.say(en['message6'])
-            gather = Gather(num_digits=6, action='/gatherAddressCode')
-            response.append(gather)
-            return str(response)
+            response.say(en['message5'],voice='Polly.Aditi',language="hi-IN",)
+            response.say(en['message6'],voice='Polly.Aditi',language="hi-IN")
+            response.record(
+                action= 'http://2e8d390ba5e3.ngrok.io/gatherAddressCode',
+                method='GET',
+                finish_on_key='*',
+                transcribe=True,
+                play_beep=True
+            )
         else:
             response.redirect('/answer')
     else:
@@ -79,15 +90,37 @@ def gatherConfirm():
 
 @app.route('/gatherAddressCode',methods=['POST','GET'])
 def gatherAddressCode():
+    global orderAudio
     response = VoiceResponse()
-    if 'Digits' in request.values:
-        addressCode = request.values['Digits']
+    args = request.args
+    if 'RecordingUrl' in args:    
+        orderAddress = getAudio(args['RecordingUrl'])
         orderId = generateOrderId()
-        response.say(en['message7'])
-        response.say(en['message8'])
-        response.say(en['message9']+str(orderId))     
-        print(addressCode,orderId,orderAudio)
-        response.say(en['message10'])
+        response.say(en['message7'],voice='Polly.Aditi',language="hi-IN")
+        response.say(en['message8'],voice='Polly.Aditi',language="hi-IN",)
+        response.say(en['message9']+str(orderId),voice='Polly.Aditi',language="hi-IN")     
+        orderAudio = orderAudio.lower()
+        orders = orderAudio.split("and")
+        orderDetails = []
+        for order in orders:
+            orderSplit = order.split("of")
+            toAdd = dict()
+            toAdd["itemName"] = orderSplit[1]
+            toAdd["itemQty"] = orderSplit[0]
+            orderDetails.append(toAdd)
+        orderJson = {
+            "orderAddress":orderAddress,
+            "orderDetails":orderDetails,
+            "orderId":orderId,
+            "orderPhoneNo":request.values['From'],
+             "orderProcessed":False
+        }
+        response.say(en['message10'],voice='Polly.Aditi',language="hi-IN")
+        
+        #For now hardcoing the vendor id
+        vendorId = 2334333
+        #Updating in the database
+        db.collection('orders').document(str(vendorId)).collection('orders').document(str(orderId)).set(orderJson)
         return str(response)
     else:
         response.redirect('/answer')
