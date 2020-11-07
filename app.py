@@ -8,11 +8,14 @@ from firebase_admin import credentials,firestore
 import math
 from twilio.rest import Client
 import json 
+from geopy.geocoders import Nominatim
+import requests
   
 f = open('credentials.json',) 
   
 data = json.load(f) 
 
+geolocator = Nominatim(user_agent="Headout-App")
 account_sid = data['account_sid']
 auth_token = data['auth_token']
 client = Client(account_sid, auth_token)
@@ -34,7 +37,20 @@ en  = {
     'message7':'Thank you for providing the address.',
     'message8':'Your order has been processed. Your order will be shipped soon.',
     'message9':'Your order id is ',
-    'message10':'Thank you for shopping with us. We hope to see you again, GoodBye.'
+    'message10':'The order summary is sent by SMS to your phone. Thank you for shopping with us. We hope to see you again, GoodBye.',
+    'message11':'Press 1 for Emergency Medicine Service, Press 2 to get Emergency Contact Numbers',
+    'message12': 'Thank you for choosing option 1',
+    'message14':'Thank you for choosing option 2',
+    'message15':'Please enter your pincode',
+    'message16':'Thank you for entering the pincode',
+    'message17':'Press 1 for nearby hospitals, Press 2 for nearby Police stations, Press 3 for nearby Fire stations',
+    'message18':'Thank you for choosing the option.',
+    'message19':'We are messaging the details of nearby',
+    'message20':'Please enter your pincode',
+    "message21":"The information has been sent to your mobile phone through SMS",
+    "message22":"Thank you for using the service, we hope to help you again, GoodBye!",
+    "message23":"Welcome to the Emergency Mobile helpline service",
+    'message24':"Thank you for providing the pincode."
 }
 
 app = Flask(__name__)
@@ -46,12 +62,10 @@ def hello():
 
 @app.route('/sendsms')
 def sendSms():
-    data = request.json
-    print(data)
-    body = data['body']
-    number = data['number']
-    print(body)
-    print(number)
+    data = request.args
+    body = data.get('body')
+    number = data.get('number')
+    number = '+'+number
     try:
         message = client.messages.create(
             body=body,
@@ -62,6 +76,92 @@ def sendSms():
         return jsonify({"success":True,"messageId":message.sid})
     except Exception as e:
         return f"An Error Occured: {e}",400
+
+@app.route('/index',methods=['GET','POST'])
+def index():
+    print("Helllo")
+    response = VoiceResponse()
+    response.say(en['message23'],voice='Polly.Aditi',language="hi-IN")
+    response.say(en['message11'],voice='Polly.Aditi',language="hi-IN")
+    gather = Gather(num_digits=1,action='/handleChoice')
+    response.append(gather)
+    return str(response)
+
+@app.route('/handleChoice',methods=['GET','POST'])
+def handleChoice():
+    response = VoiceResponse()
+    if 'Digits' in request.values:
+        choice = int(request.values['Digits'])
+        if choice == 1:
+            response.say(en['message12'],voice='Polly.Aditi',language="hi-IN")
+            response.redirect('/answer')
+        elif choice == 2:
+            response.say(en['message14'],voice='Polly.Aditi',language="hi-IN")
+            response.say(en['message17'],voice='Polly.Aditi',language="hi-IN")
+            gather = Gather(num_digits=1,action='/answer2')
+            response.append(gather)
+            return str(response)
+        else:
+            response.redirect('/index')
+    else:
+        response.redirect('/index')
+    
+    return str(response)
+
+@app.route('/answer2',methods=['GET','POST'])
+def answer1():
+    response = VoiceResponse()
+    if 'Digits' in request.values:
+        choice = int(request.values['Digits'])
+        response.say(en['message18'],voice='Polly.Aditi',language="hi-IN")
+        response.say(en['message20'],voice='Polly.Aditi',language="hi-IN")
+        gather = Gather(num_digits=6,action='/answer2_1/'+str(choice))
+        response.append(gather)
+        return str(response)
+    else:
+        response.redirect('/index')
+        return str(response)
+
+@app.route('/answer2_1/<choice>',methods=['GET','POST'])
+def answer2_1(choice):
+    response = VoiceResponse()
+    choice = int(choice)
+    args = request.args
+    if 'Digits' in request.values:
+        pincode = int(request.values['Digits'])
+        phone = request.values['From']
+        response.say(en['message24'],voice='Polly.Aditi',language="hi-IN")
+        message = ""
+        if choice == 1:
+            type = "hospital"
+            message += "The Hospitals for the pincode "+ str(pincode) + "are "
+            for i in range(0,5):
+                message += "Hospital "+str((i+1)) +" Phone No : XXXXXXXXXX" + "\n"
+            message += "\n Thank you for using the service. \n Regards, \n Team Hackout"
+        elif choice == 2:
+            type = "police"
+            message += "The Police stations for the pincode "+ str(pincode) + "are "
+            for i in range(0,5):
+                message += "Police Stations "+str((i+1)) +" Phone No : XXXXXXXXXX" + "\n"
+            message += "\n Thank you for using the service. \n Regards, \n Team Hackout"
+        else:
+            type = "Fire station"
+            message += "The Fire stations for the pincode "+ str(pincode) + "are "
+            for i in range(0,5):
+                message += "Fire station "+str((i+1)) +" Phone No : XXXXXXXXXX" + "\n"
+            message += "\n Thank you for using the service. \n Regards, \n Team Hackout"
+
+        url = "https://35c680d4bcf6.ngrok.io/sendsms"
+        data = {
+            "body":message,
+            "number":phone
+        }
+        requests.get(url, params=data) 
+        response.say(en['message21'],voice='Polly.Aditi',language="hi-IN")
+        response.say(en['message22'],voice='Polly.Aditi',language="hi-IN")
+        return str(response)
+    else:
+        return str(response)
 
 
 @app.route("/answer", methods=['GET', 'POST'])
@@ -84,7 +184,7 @@ def voice():
           
         )
         response.record(
-            action= 'http://2e8d390ba5e3.ngrok.io/answer',
+            action= 'http://35c680d4bcf6.ngrok.io/answer',
             method='GET',
             finish_on_key='*',
             transcribe=True,
@@ -105,7 +205,7 @@ def gatherConfirm():
             response.say(en['message5'],voice='Polly.Aditi',language="hi-IN",)
             response.say(en['message6'],voice='Polly.Aditi',language="hi-IN")
             response.record(
-                action= 'http://2e8d390ba5e3.ngrok.io/gatherAddressCode',
+                action= 'https://35c680d4bcf6.ngrok.io/gatherAddressCode',
                 method='GET',
                 finish_on_key='*',
                 transcribe=True,
@@ -131,12 +231,17 @@ def gatherAddressCode():
         orderAudio = orderAudio.lower()
         orders = orderAudio.split("and")
         orderDetails = []
+        message = ""
         for order in orders:
             orderSplit = order.split("of")
             toAdd = dict()
-            toAdd["itemName"] = orderSplit[1]
-            toAdd["itemQty"] = orderSplit[0]
+            if len(orderSplit) > 1:
+                toAdd["itemName"] = orderSplit[1]
+                toAdd["itemQty"] = orderSplit[0]
+                message += orderSplit[1] + " " + orderSplit[0] + "\n"
             orderDetails.append(toAdd)
+        message += "\n Your Order Id is "+str(orderId)+"\n Thank you for shopping with us. We hope to see you again!"
+        message += "\n Regards, Team Hackout!"
         orderJson = {
             "orderAddress":orderAddress,
             "orderDetails":orderDetails,
@@ -144,8 +249,14 @@ def gatherAddressCode():
             "orderPhoneNo":request.values['From'],
              "orderProcessed":False
         }
+        url = "https://35c680d4bcf6.ngrok.io/sendsms"
+        data = {
+            "body":message,
+            "number":request.values['From']
+        }
+        requests.get(url, params=data)
         response.say(en['message10'],voice='Polly.Aditi',language="hi-IN")
-        
+         
         #For now hardcoing the vendor id
         vendorId = 2334333
         #Updating in the database
