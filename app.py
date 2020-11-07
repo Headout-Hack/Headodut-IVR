@@ -81,7 +81,7 @@ def voice():
           
         )
         response.record(
-            action= 'http://2e8d390ba5e3.ngrok.io/answer',
+            action= 'https://hackout-helpline.herokuapp.com/answer',
             method='GET',
             finish_on_key='*',
             transcribe=True,
@@ -102,7 +102,7 @@ def gatherConfirm():
             response.say(en['message5'],voice='Polly.Aditi',language="hi-IN",)
             response.say(en['message6'],voice='Polly.Aditi',language="hi-IN")
             response.record(
-                action= 'http://2e8d390ba5e3.ngrok.io/gatherAddressCode',
+                action= 'https://hackout-helpline.herokuapp.com/gatherAddressCode',
                 method='GET',
                 finish_on_key='*',
                 transcribe=True,
