@@ -50,15 +50,18 @@ def sendSms():
     print(data)
     body = data['body']
     number = data['number']
+    print(body)
+    print(number)
     try:
         message = client.messages.create(
             body=body,
             from_='+12054489824',
             to=number
         )
+        print("hello")
         return jsonify({"success":True,"messageId":message.sid})
     except Exception as e:
-        return f"An Error Occured: {e}"
+        return f"An Error Occured: {e}",400
 
 
 @app.route("/answer", methods=['GET', 'POST'])
