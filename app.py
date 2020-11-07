@@ -1,4 +1,4 @@
-from flask import Flask,request
+from flask import Flask,request,jsonify
 from twilio.twiml.voice_response import VoiceResponse,Gather
 import speech_recognition as sr
 import urllib.request
@@ -6,8 +6,18 @@ import random
 import firebase_admin
 from firebase_admin import credentials,firestore
 import math
+from twilio.rest import Client
+import json 
+  
+f = open('credentials.json',) 
+  
+data = json.load(f) 
 
+account_sid = data['account_sid']
+auth_token = data['auth_token']
+client = Client(account_sid, auth_token)
 r = sr.Recognizer()
+
 
 cred = credentials.Certificate("serviceAccount.json")
 firebase_admin.initialize_app(cred)
@@ -34,6 +44,22 @@ def hello():
     return "Hello world"
 
 
+@app.route('/sms')
+def sendSms():
+    data = request.json
+    print(data)
+    body = data['body']
+    number = data['number']
+    try:
+        message = client.messages.create(
+            body=body,
+            from_='+12054489824',
+            to=number
+        )
+        return jsonify({"success":True,"messageId":message.sid})
+    except Exception as e:
+        return f"An Error Occured: {e}"
+
 
 @app.route("/answer", methods=['GET', 'POST'])
 def voice():
@@ -55,7 +81,7 @@ def voice():
           
         )
         response.record(
-            action= 'https://hackout-helpline.herokuapp.com/answer',
+            action= 'http://2e8d390ba5e3.ngrok.io/answer',
             method='GET',
             finish_on_key='*',
             transcribe=True,
@@ -76,7 +102,7 @@ def gatherConfirm():
             response.say(en['message5'],voice='Polly.Aditi',language="hi-IN",)
             response.say(en['message6'],voice='Polly.Aditi',language="hi-IN")
             response.record(
-                action= 'https://hackout-helpline.herokuapp.com/gatherAddressCode',
+                action= 'http://2e8d390ba5e3.ngrok.io/gatherAddressCode',
                 method='GET',
                 finish_on_key='*',
                 transcribe=True,
