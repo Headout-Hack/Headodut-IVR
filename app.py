@@ -44,7 +44,7 @@ def hello():
     return "Hello world"
 
 
-@app.route('/sms')
+@app.route('/sendsms')
 def sendSms():
     data = request.json
     print(data)
